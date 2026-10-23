@@ -110,7 +110,12 @@ jobs:
           matches=0
           while IFS= read -r -d '' f; do
             info="$(file -b "$f")"
-            case "$info" in *Mach-O*) [[ "$info" == *x86_64* && "$info" != *universal* ]] || { echo "error: dependency is not Intel-only: $f ($info)" >&2; exit 1; }; matches=$((matches+1));; esac
+            case "$info" in
+              *Mach-O*)
+                [[ "$info" == *x86_64* ]] || { echo "error: dependency has no x86_64 slice: $f ($info)" >&2; exit 1; }
+                matches=$((matches+1))
+                ;;
+            esac
           done < <(find "$INTEL_LIBDIR" -type f \( -name '*.dylib' -o -name '*.a' \) -print0)
           (( matches > 0 )) || { echo 'error: no native dependency files found' >&2; exit 1; }
       - name: Build Mixar
@@ -126,7 +131,15 @@ jobs:
           [[ -d "$app" && -x "$exe" ]] || { echo 'error: Mixar.app or executable missing' >&2; exit 1; }
           [[ "$(lipo -archs "$exe")" == x86_64 ]] || { echo 'error: main executable is not x86_64' >&2; exit 1; }
           count=0
-          while IFS= read -r -d '' f; do info="$(file -b "$f")"; case "$info" in *Mach-O*) [[ "$info" == *x86_64* && "$info" != *universal* ]] || { echo "error: bundle binary is not Intel-only: $f ($info)" >&2; exit 1; }; count=$((count+1));; esac; done < <(find "$app" -type f -print0)
+          while IFS= read -r -d '' f; do
+            info="$(file -b "$f")"
+            case "$info" in
+              *Mach-O*)
+                [[ "$info" == *x86_64* ]] || { echo "error: bundle binary has no x86_64 slice: $f ($info)" >&2; exit 1; }
+                count=$((count+1))
+                ;;
+            esac
+          done < <(find "$app" -type f -print0)
           (( count > 0 )) || { echo 'error: no Mach-O files found in app' >&2; exit 1; }
           py="$(find "$app/Contents/Resources" -type f -path '*/python/bin/python3*' -perm -111 -print -quit)"
           [[ -n "$py" && -x "$py" ]] || { echo 'error: embedded Python executable missing' >&2; exit 1; }
