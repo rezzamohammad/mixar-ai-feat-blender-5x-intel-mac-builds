@@ -21,8 +21,6 @@ jobs:
     runs-on: macos-15-intel
     timeout-minutes: 360
     env:
-      MIXAR_SOURCE_REPOSITORY: ${{ vars.MIXAR_SOURCE_REPOSITORY || 'Mixar-AI/mixar-app' }}
-      MIXAR_SOURCE_REF: ${{ vars.MIXAR_SOURCE_REF || 'main' }}
       MIXAR_ENV: Prod
       BUILD_CORES: "3"
       MIXAR_CUDA: "0"
@@ -33,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: ${{ vars.MIXAR_SOURCE_REPOSITORY }}
+          repository: Mixar-AI/mixar-app
           ref: ${{ inputs.upstream_ref }}
           fetch-depth: 0
           submodules: false
@@ -49,7 +47,9 @@ jobs:
           make init 2>&1 | tee init.log
           grep -q 'WARNING: macOS x64/Intel support was dropped' init.log && echo 'Intel upstream dependency warning recorded; external matching stack is mandatory.' || true
       - name: Fetch matching Intel dependency stack
-        env: { DEPS_INSTALL_DIR: ${{ github.workspace }}/lib-macos-x64, REPO: ${{ env.INTEL_DEPS_REPO }} }
+        env:
+          DEPS_INSTALL_DIR: ${{ github.workspace }}/lib-macos-x64
+          REPO: ${{ env.INTEL_DEPS_REPO }}
         run: ./scripts/intel/fetch-deps.sh
       - name: Verify dependency architecture
         run: |
@@ -61,7 +61,8 @@ jobs:
           done < <(find "$INTEL_LIBDIR" -type f \( -name '*.dylib' -o -name '*.a' \) -print0)
           (( matches > 0 )) || { echo 'error: no native dependency files found' >&2; exit 1; }
       - name: Build Mixar
-        env: { LIBDIR: ${{ github.workspace }}/lib-macos-x64 }
+        env:
+          LIBDIR: ${{ github.workspace }}/lib-macos-x64
         run: make build 2>&1 | tee build.log
       - name: Verify embedded runtime and architecture
         run: |
@@ -75,19 +76,19 @@ jobs:
           py="$app/Contents/Resources/5.2/python/bin/python3.13"
           [[ -x "$py" ]] || { echo "error: embedded Python missing: $py" >&2; exit 1; }
           "$py" - <<'PY' > runtime-diagnostics.txt
-import hashlib, sys
-print('python', sys.version)
-for name in ('blake2b', 'blake2s', 'sha256'):
-    h = getattr(hashlib, name, None)
-    print(name, 'OK' if h else 'MISSING')
-    if h: h(b'validation')
-import truststore
-from jsonschema import Draft202012Validator
-from mcp import ClientSession
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-print('Mixar embedded imports: OK')
-PY
+          import hashlib, sys
+          print('python', sys.version)
+          for name in ('blake2b', 'blake2s', 'sha256'):
+              h = getattr(hashlib, name, None)
+              print(name, 'OK' if h else 'MISSING')
+              if h: h(b'validation')
+          import truststore
+          from jsonschema import Draft202012Validator
+          from mcp import ClientSession
+          from mcp.server import Server
+          from mcp.server.stdio import stdio_server
+          print('Mixar embedded imports: OK')
+          PY
       - name: Package and verify DMG
         run: |
           set -euo pipefail
