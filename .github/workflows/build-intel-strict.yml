@@ -51,6 +51,13 @@ jobs:
           set -o pipefail
           make init 2>&1 | tee init.log
           grep -q 'WARNING: macOS x64/Intel support was dropped' init.log && echo 'Intel upstream dependency warning recorded; external matching stack is mandatory.' || true
+      - name: Apply Intel build integration
+        run: |
+          set -euo pipefail
+          cp build-automation/scripts/unix/build.sh scripts/unix/build.sh
+          cp build-automation/scripts/python_requirements.txt scripts/python_requirements.txt
+          install -m 0755 build-automation/scripts/intel/fetch-deps.sh build-automation/scripts/intel/fetch-deps.sh
+
       - name: Fetch matching Intel dependency stack
         env:
           DEPS_INSTALL_DIR: ${{ github.workspace }}/lib-macos-x64

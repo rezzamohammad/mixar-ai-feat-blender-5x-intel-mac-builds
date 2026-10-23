@@ -35,6 +35,13 @@ jobs:
         run: test "$(uname -m)" = x86_64
       - name: Initialize pinned Blender source
         run: make init
+      - name: Apply Intel build integration
+        run: |
+          set -euo pipefail
+          cp build-automation/scripts/unix/build.sh scripts/unix/build.sh
+          cp build-automation/scripts/python_requirements.txt scripts/python_requirements.txt
+          install -m 0755 build-automation/scripts/intel/fetch-deps.sh build-automation/scripts/intel/fetch-deps.sh
+
       - name: Fetch matching Intel dependency stack
         env:
           DEPS_INSTALL_DIR: ${{ github.workspace }}/lib-macos-x64
