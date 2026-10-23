@@ -26,6 +26,11 @@ jobs:
           fetch-depth: 0
           submodules: false
           token: ${{ secrets.MIXAR_SOURCE_TOKEN || github.token }}
+      - name: Checkout build automation
+        uses: actions/checkout@v4
+        with:
+          path: build-automation
+          fetch-depth: 1
       - name: Verify Intel runner
         run: test "$(uname -m)" = x86_64
       - name: Initialize pinned Blender source
@@ -34,7 +39,7 @@ jobs:
         env:
           DEPS_INSTALL_DIR: ${{ github.workspace }}/lib-macos-x64
           REPO: ${{ env.INTEL_DEPS_REPO }}
-        run: ./scripts/intel/fetch-deps.sh
+        run: ./build-automation/scripts/intel/fetch-deps.sh
       - name: Build Mixar
         env:
           LIBDIR: ${{ github.workspace }}/lib-macos-x64
