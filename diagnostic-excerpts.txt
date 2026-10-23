@@ -1,0 +1,18 @@
+Targeted excerpts from the archived Intel macOS build:
+
+Expected Intel source warning:
+  macOS x64/Intel support was dropped in Blender 5.0.
+  Pre-compiled dependencies are no longer provided by upstream.
+
+Successful embedded runtime:
+  Successfully installed Python packages to embedded Python site-packages
+  Bundled trust and MCP runtime imports passed
+  Build Complete
+
+Successful artifact validation:
+  Non-empty x86_64 DMG produced and uploaded
+
+Warnings retained for diagnosis:
+  OpenAL APIs are deprecated on macOS 10.15+
+  some legacy static FFmpeg/JPEG/AOM/VPX/X265 objects lack a platform load command
+  embedded Python logged unsupported blake2b/blake2s during CI; the final DMG was rechecked locally and both hashes worked

@@ -1,0 +1,16 @@
+artifact=mixar-4.2.2-git20261023.unknown-x86_64.dmg
+artifact_sha256=7edd74817dd4fd8b328a7e2c52be3f11580819082459adf09d512768af20cbe1
+source_repository=https://github.com/Mixar-AI/mixar-app
+source_ref=official source project; archived binary provenance retained from the original build
+blender_commit=fbe6228777e7d9afefcd61a413844e790ae75db7
+blender_version=5.2.0
+intel_dependency_repository=https://github.com/lastowl/intel-blender-5
+intel_dependency_release=deps-x64-c17b7766d42d6499
+target_architecture=x86_64
+workflow_run=archived CI run (original build provenance; source project is Mixar-AI/mixar-app)
+workflow_artifact=archived CI artifact (original build provenance; source project is Mixar-AI/mixar-app)
+workflow_artifact_size=362790603 bytes (artifact zip; DMG file 347 MiB)
+local_hdiutil_verify=VALID
+local_native_macho_files=224
+local_non_x86_64_macho_files=0
+codesign=unsigned community build; not notarized

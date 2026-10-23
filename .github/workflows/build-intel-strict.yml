@@ -1,0 +1,125 @@
+name: Build Intel DMG (strict + release)
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Optional release tag, e.g. mixar-4.2.2-intel1; blank means artifact only'
+        required: false
+        type: string
+      upstream_ref:
+        description: 'Mixar branch or tag to build'
+        required: false
+        default: main
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    timeout-minutes: 360
+    env:
+      MIXAR_SOURCE_REPOSITORY: ${{ vars.MIXAR_SOURCE_REPOSITORY || 'Mixar-AI/mixar-app' }}
+      MIXAR_SOURCE_REF: ${{ vars.MIXAR_SOURCE_REF || 'main' }}
+      MIXAR_ENV: Prod
+      BUILD_CORES: "3"
+      MIXAR_CUDA: "0"
+      BLENDER_SRC: ${{ github.workspace }}/upstream
+      INTEL_LIBDIR: ${{ github.workspace }}/lib-macos-x64
+      GH_TOKEN: ${{ github.token }}
+      INTEL_DEPS_REPO: lastowl/intel-blender-5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.MIXAR_SOURCE_REPOSITORY }}
+          ref: ${{ inputs.upstream_ref }}
+          fetch-depth: 0
+          submodules: false
+          token: ${{ secrets.MIXAR_SOURCE_TOKEN || github.token }}
+      - name: Verify native Intel toolchain
+        run: |
+          set -euo pipefail
+          [[ "$(uname -m)" == x86_64 ]] || { echo 'error: runner is not Intel' >&2; exit 1; }
+          sw_vers; xcodebuild -version; xcrun --sdk macosx --show-sdk-path
+      - name: Initialize pinned Blender source
+        run: |
+          set -o pipefail
+          make init 2>&1 | tee init.log
+          grep -q 'WARNING: macOS x64/Intel support was dropped' init.log && echo 'Intel upstream dependency warning recorded; external matching stack is mandatory.' || true
+      - name: Fetch matching Intel dependency stack
+        env: { DEPS_INSTALL_DIR: ${{ github.workspace }}/lib-macos-x64, REPO: ${{ env.INTEL_DEPS_REPO }} }
+        run: ./scripts/intel/fetch-deps.sh
+      - name: Verify dependency architecture
+        run: |
+          set -euo pipefail
+          matches=0
+          while IFS= read -r -d '' f; do
+            info="$(file -b "$f")"
+            case "$info" in *Mach-O*) [[ "$info" == *x86_64* ]] || { echo "error: non-Intel dependency: $f ($info)" >&2; exit 1; }; matches=$((matches+1));; esac
+          done < <(find "$INTEL_LIBDIR" -type f \( -name '*.dylib' -o -name '*.a' \) -print0)
+          (( matches > 0 )) || { echo 'error: no native dependency files found' >&2; exit 1; }
+      - name: Build Mixar
+        env: { LIBDIR: ${{ github.workspace }}/lib-macos-x64 }
+        run: make build 2>&1 | tee build.log
+      - name: Verify embedded runtime and architecture
+        run: |
+          set -euo pipefail
+          app="$GITHUB_WORKSPACE/build/Prod/bin/Mixar.app"; exe="$app/Contents/MacOS/Mixar"
+          [[ -d "$app" && -x "$exe" ]] || { echo 'error: Mixar.app or executable missing' >&2; exit 1; }
+          [[ "$(lipo -archs "$exe")" == x86_64 ]] || { echo 'error: main executable is not x86_64' >&2; exit 1; }
+          count=0
+          while IFS= read -r -d '' f; do info="$(file -b "$f")"; case "$info" in *Mach-O*) [[ "$info" == *x86_64* ]] || { echo "error: non-Intel bundle binary: $f ($info)" >&2; exit 1; }; count=$((count+1));; esac; done < <(find "$app" -type f -print0)
+          (( count > 0 )) || { echo 'error: no Mach-O files found in app' >&2; exit 1; }
+          py="$app/Contents/Resources/5.2/python/bin/python3.13"
+          [[ -x "$py" ]] || { echo "error: embedded Python missing: $py" >&2; exit 1; }
+          "$py" - <<'PY' > runtime-diagnostics.txt
+import hashlib, sys
+print('python', sys.version)
+for name in ('blake2b', 'blake2s', 'sha256'):
+    h = getattr(hashlib, name, None)
+    print(name, 'OK' if h else 'MISSING')
+    if h: h(b'validation')
+import truststore
+from jsonschema import Draft202012Validator
+from mcp import ClientSession
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+print('Mixar embedded imports: OK')
+PY
+      - name: Package and verify DMG
+        run: |
+          set -euo pipefail
+          cmake --build build/Prod --target package --config Release
+          dmg="$(find "$GITHUB_WORKSPACE/build/Prod" -type f -name '*.dmg' -size +0c -print -quit)"
+          [[ -n "$dmg" ]] || { echo 'error: no non-empty DMG produced' >&2; exit 1; }
+          shasum -a 256 "$dmg" | tee SHA256SUMS
+          hdiutil verify "$dmg"
+          file "$dmg" | tee dmg-file.txt
+          printf 'commit=%s\nbranch=%s\nrunner=%s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$(uname -m)" > build-manifest.txt
+          cat runtime-diagnostics.txt >> build-manifest.txt
+          printf 'dmg=%s\n' "$dmg" >> build-manifest.txt
+          echo "MIXAR_DMG=$dmg" >> "$GITHUB_ENV"
+      - name: Upload DMG and diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mixar-Intel-macOS-strict-${{ github.run_number }}
+          path: |
+            ${{ env.MIXAR_DMG }}
+            SHA256SUMS
+            build-manifest.txt
+            runtime-diagnostics.txt
+            init.log
+            build.log
+            dmg-file.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Create GitHub release when requested
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" "$MIXAR_DMG" SHA256SUMS build-manifest.txt runtime-diagnostics.txt --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes "Intel x86_64 Mixar build from $GITHUB_SHA. See build-manifest.txt and SHA256SUMS."

@@ -1,0 +1,12 @@
+Local read-only verification of the downloaded DMG:
+- hdiutil verify: VALID
+- main executable: Mach-O 64-bit executable x86_64
+- lipo -archs: x86_64
+- native Mach-O files inspected: 224
+- non-x86_64 native files: 0
+- embedded Python: 3.13.13
+- hashlib.blake2b: OK
+- hashlib.blake2s: OK
+- hashlib.sha256: OK
+- truststore/jsonschema/mcp imports: OK
+- codesign: unsigned; expected for this community artifact

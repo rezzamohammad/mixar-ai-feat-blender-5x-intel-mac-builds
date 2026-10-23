@@ -1,0 +1,49 @@
+name: Build Intel DMG (legacy)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    timeout-minutes: 360
+    env:
+      MIXAR_SOURCE_REPOSITORY: ${{ vars.MIXAR_SOURCE_REPOSITORY || 'Mixar-AI/mixar-app' }}
+      MIXAR_SOURCE_REF: ${{ vars.MIXAR_SOURCE_REF || 'main' }}
+      MIXAR_ENV: Prod
+      BUILD_CORES: "3"
+      MIXAR_CUDA: "0"
+      BLENDER_SRC: ${{ github.workspace }}/upstream
+      INTEL_LIBDIR: ${{ github.workspace }}/lib-macos-x64
+      GH_TOKEN: ${{ github.token }}
+      INTEL_DEPS_REPO: lastowl/intel-blender-5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MIXAR_SOURCE_REPOSITORY }}
+          ref: ${{ env.MIXAR_SOURCE_REF }}
+          fetch-depth: 0
+          submodules: false
+          token: ${{ secrets.MIXAR_SOURCE_TOKEN || github.token }}
+      - name: Verify Intel runner
+        run: test "$(uname -m)" = x86_64
+      - name: Initialize pinned Blender source
+        run: make init
+      - name: Fetch matching Intel dependency stack
+        env: { DEPS_INSTALL_DIR: ${{ github.workspace }}/lib-macos-x64, REPO: ${{ env.INTEL_DEPS_REPO }} }
+        run: ./scripts/intel/fetch-deps.sh
+      - name: Build Mixar
+        env: { LIBDIR: ${{ github.workspace }}/lib-macos-x64 }
+        run: make build
+      - name: Package DMG
+        run: cmake --build build/Prod --target package --config Release
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mixar-Intel-macOS-legacy
+          path: build/Prod/*.dmg
+          if-no-files-found: error
+          retention-days: 7
