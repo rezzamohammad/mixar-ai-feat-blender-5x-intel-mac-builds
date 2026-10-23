@@ -100,9 +100,8 @@ jobs:
           set -euo pipefail
           header=upstream/source/blender/blenkernel/BKE_blender_version.h
           test -f "$header" || { echo "error: Blender version header missing: $header" >&2; exit 1; }
-          major="$(sed -n 's/^[[:space:]]*#define BLENDER_VERSION_MAJOR[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$header" | head -1)"
-          minor="$(sed -n 's/^[[:space:]]*#define BLENDER_VERSION_MINOR[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$header" | head -1)"
-          [[ "$major.$minor" == 5.2 ]] || { echo "error: Intel integration is validated for Blender 5.2, found $major.$minor; update the integration before building" >&2; exit 1; }
+          version="$(sed -n 's/^[[:space:]]*#define BLENDER_VERSION[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$header" | head -1)"
+          [[ "$version" == 502 ]] || { echo "error: Intel integration is validated for Blender 5.2, found encoded version ${version:-unknown}; update the integration before building" >&2; exit 1; }
           grep -q 'BLENDER_VERSION="${BLENDER_VERSION:-5.2}"' scripts/unix/settings.sh || { echo 'error: build integration Blender version setting drifted' >&2; exit 1; }
           grep -q 'PYTHON_VERSION="${PYTHON_VERSION:-3.13}"' scripts/unix/settings.sh || { echo 'error: build integration Python version setting drifted' >&2; exit 1; }
       - name: Verify dependency architecture
