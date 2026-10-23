@@ -32,16 +32,33 @@ jobs:
           path: build-automation
           fetch-depth: 1
       - name: Verify Intel runner
-        run: test "$(uname -m)" = x86_64
-      - name: Initialize pinned Blender source
-        run: make init
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = x86_64
+          test -f build-automation/scripts/unix/build.sh
+          test -f build-automation/scripts/python_requirements.txt
+          test -x build-automation/scripts/intel/fetch-deps.sh
       - name: Apply Intel build integration
         run: |
           set -euo pipefail
           cp build-automation/scripts/unix/build.sh scripts/unix/build.sh
           cp build-automation/scripts/python_requirements.txt scripts/python_requirements.txt
-          install -m 0755 build-automation/scripts/intel/fetch-deps.sh build-automation/scripts/intel/fetch-deps.sh
-
+          bash -n scripts/unix/build.sh
+          grep -q -- '-DLIBDIR=' scripts/unix/build.sh
+          grep -q 'CMAKE_OSX_ARCHITECTURES=x86_64' scripts/unix/build.sh
+      - name: Initialize pinned Blender source
+        run: make init
+      - name: Preflight source and dependency contract
+        env:
+          DEPS_REPO: ${{ env.INTEL_DEPS_REPO }}
+        run: |
+          set -euo pipefail
+          test -f Makefile
+          test -f upstream/build_files/build_environment/cmake/versions.cmake
+          test -d build-automation/scripts
+          tag="deps-x64-$(shasum -a 256 upstream/build_files/build_environment/cmake/versions.cmake | cut -c1-16)"
+          gh release view "$tag" --repo "$DEPS_REPO" >/dev/null
+          echo "Preflight dependency release exists: $tag"
       - name: Fetch matching Intel dependency stack
         env:
           DEPS_INSTALL_DIR: ${{ github.workspace }}/lib-macos-x64
@@ -50,7 +67,9 @@ jobs:
       - name: Build Mixar
         env:
           LIBDIR: ${{ github.workspace }}/lib-macos-x64
-        run: make build
+        run: |
+          set -euo pipefail
+          make build
       - name: Package DMG
         run: cmake --build build/Prod --target package --config Release
       - name: Upload DMG artifact
