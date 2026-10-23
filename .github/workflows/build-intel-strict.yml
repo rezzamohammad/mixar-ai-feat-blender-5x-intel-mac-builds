@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$TAG" != *.dmg ]] || { echo 'error: release_tag is a GitHub tag, not a .dmg filename' >&2; exit 1; }
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
             echo "error: release tag already exists: $TAG" >&2
             exit 1
           fi
@@ -68,6 +68,9 @@ jobs:
           set -euo pipefail
           cp build-automation/scripts/unix/build.sh scripts/unix/build.sh
           cp build-automation/scripts/python_requirements.txt scripts/python_requirements.txt
+          for required in scripts/unix/settings.sh scripts/unix/overlay.sh scripts/unix/dev_codesign.sh scripts/generate_config.py scripts/check_python_runtime.py cmake/mixar_overrides.cmake; do
+            test -f "$required" || { echo "error: source checkout is missing required file: $required" >&2; exit 1; }
+          done
           bash -n scripts/unix/build.sh
           grep -q -- '-DLIBDIR=' scripts/unix/build.sh
           grep -q 'CMAKE_OSX_ARCHITECTURES=x86_64' scripts/unix/build.sh
